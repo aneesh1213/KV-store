@@ -35,3 +35,12 @@ func (s *Store) Get(key string) (string, error) {
 
 	return val, nil
 }
+
+
+func (s *Store) Delete (key string){
+	delete(s.data, key);
+}
+
+func (s *Store) Len() int {
+	return len(s.data)
+}
