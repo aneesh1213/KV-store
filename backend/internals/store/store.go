@@ -2,11 +2,7 @@ package store
 
 import (
 	"errors"
-	"fmt"
-
-	"github.com/aneesh1213/kvstore/backend/internals/store"
 )
-
 
 var NotFound = errors.New("key not found")
 
@@ -16,7 +12,6 @@ type Store struct {
 	data map[string]string
 }
 
-
 // returns a emoty store ready to use
 func New() *Store {
 	return &Store{
@@ -24,23 +19,19 @@ func New() *Store {
 	}
 }
 
+// set uses to set the key and value
 
-// set uses to set the key and value 
-
-func (s *Store) Set(key, value string){
+func (s *Store) Set(key, value string) {
 	s.data[key] = value
 }
 
+// get returns the key from the store itself
 
-// get returns the key from the store itself 
-
-func (s *Store) Get (key string) (string, error){
+func (s *Store) Get(key string) (string, error) {
 	val, ok := s.data[key]
 	if !ok {
-		return "key not fouind", NotFound;
+		return "", NotFound
 	}
 
-	return val, nil;
+	return val, nil
 }
-
-
