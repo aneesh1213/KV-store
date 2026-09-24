@@ -6,16 +6,15 @@ import (
 	"testing"
 )
 
-
-func TestConcurrentWrites(t *testing.T){
+func TestConcurrentWrites(t *testing.T) {
 	s := New()
 
 	var wg sync.WaitGroup
 
-	for i:=0;i<100;i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func(n int){
-			defer wg.Done();
+		go func(n int) {
+			defer wg.Done()
 			key := fmt.Sprintf("key-%d", n)
 			s.Set(key, "value")
 		}(i)
