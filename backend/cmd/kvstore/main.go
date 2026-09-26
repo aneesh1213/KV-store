@@ -3,30 +3,35 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/aneesh1213/kvstore/backend/internals/store"
 )
 
 func main() {
-	fmt.Println("start of the kv store")
-
 	s := store.New()
 
-	s.Set("name", "aneesh")
-	s.Set("language", "go")
-
-	v, err := s.Get("name")
-	if err != nil {
-		fmt.Println("unexpected error:", err)
+	if len(os.Args) > 1 && os.Args[1] == "read" {
+		// READ mode: only look for the keys, don't write them
+		fmt.Println("=== READ mode ===")
+		v1, err := s.Get("user:1")
+		if errors.Is(err, store.NotFound) {
+			fmt.Println("user:1 -> NOT FOUND")
+		} else {
+			fmt.Println("user:1 =", v1)
+		}
+		fmt.Println("total keys:", s.Len())
 		return
 	}
-	fmt.Println("name =", v)
 
-	_, err = s.Get("vikas")
-	if errors.Is(err, store.NotFound) {
-		fmt.Println("missing key correctly reported as not found")
-	}
-
-	s.Delete("language")
-	fmt.Println("keys after delete:", s.Len())
+	// WRITE mode (default): insert keys, then hold so you can Ctrl+C
+	fmt.Println("=== WRITE mode ===")
+	s.Set("user:1", "alice")
+	s.Set("user:2", "bob")
+	fmt.Println("wrote user:1, user:2")
+	fmt.Println("total keys:", s.Len())
+	fmt.Println()
+	fmt.Println("Now Ctrl+C this process (or wait 30s for it to exit).")
+	time.Sleep(30 * time.Second)
 }
