@@ -73,14 +73,14 @@ func (w *WAL) Replay(fn func(line []byte) error) (lastGoodOffset int64, err erro
 		// Case: partial record at EOF (bytes but no '\n')
 
 		if err == io.EOF && len(line) > 0 {
-			return offset, err
+			return offset, nil
 		}
 
 
 		// Case: clean EOF (no more bytes)
 
 		if err == io.EOF && len(line) == 0 {
-			return offset, err
+			return offset, nil
 		}
 
 		// Case: real read error
@@ -104,4 +104,27 @@ func (w *WAL) Replay(fn func(line []byte) error) (lastGoodOffset int64, err erro
 	}
 
 
+}
+
+
+// function for the truncating the file, used after a bad replay 
+// to drop a partially-written record.
+
+func (w *WAL) Truncate(size int64) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if err := w.file.Truncate(size); err != nil {
+		return err
+	}
+	// Move the file position back to the new end so the next
+	// Append writes immediately after the truncation point.
+	_, err := w.file.Seek(0, io.SeekEnd)
+	return err
+}
+
+func (w *WAL) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.file.Close()
 }
