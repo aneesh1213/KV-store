@@ -2,7 +2,9 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"hash/fnv"
+	"os"
 	"sync"
 )
 
@@ -22,19 +24,20 @@ type Shard struct {
 type Store struct {
 	shards      []*Shard
 	totalShards uint32
+	wal         *WAL
 }
 
 // returns a emoty store ready to use
-func New() *Store {
-	return NewWithShards(defaultNumShards)
+func New(path string) (*Store, error) {
+	return NewWithShards(path, defaultNumShards)
 }
 
-func NewWithShards(n uint32) *Store {
+func NewWithShards(path string, n uint32) (*Store, error) {
 	if n == 0 {
 		n = 1
 	}
 
-	// create store object with shards\
+	// step 1 creating the shards
 
 	s := &Store{
 		shards:      make([]*Shard, n),
@@ -49,7 +52,47 @@ func NewWithShards(n uint32) *Store {
 		}
 	}
 
-	return s
+	// step 2 add wal to it
+	wal, err := OpenWAL(path)
+	if err != nil {
+		return nil, err
+	}
+
+	//step 3 attach it
+	s.wal = wal
+
+	// step 4:replay
+
+	offset, replayErr := wal.Replay(func(line []byte) error {
+		rec, derr := decodeRecord(line)
+		if derr != nil {
+			return derr
+		}
+
+		s.applyRecord(rec)
+		return nil
+	})
+
+	if replayErr != nil {
+		fmt.Printf("wal replay stopped early: %v\n", replayErr)
+	}
+
+	// Step 5: if Replay found a bad tail, truncate to the last good offset.
+	// Note: err is non-nil here if a bad record was found — that's expected
+	// and we want to continue anyway (forgiving mode). Log it.
+
+	fileInfo, statErr := os.Stat(path)
+	if statErr != nil {
+		return nil, statErr
+	}
+
+	if fileInfo.Size() > offset {
+		if err := wal.Truncate(offset); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
+
 }
 
 func (s *Store) getShard(key string) *Shard {
@@ -58,13 +101,40 @@ func (s *Store) getShard(key string) *Shard {
 	return s.shards[h.Sum32()%s.totalShards]
 }
 
+// applyrecord func for applying the data in the shard
+
+func (s *Store) applyRecord(r record) {
+	sh := s.getShard(r.Key)
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+
+	switch r.Op {
+	case "SET":
+		sh.data[r.Key] = r.Value
+	case "DELETE":
+		delete(sh.data, r.Key)
+	}
+
+}
+
 // set uses to set the key and value
 
-func (s *Store) Set(key, value string) {
+func (s *Store) Set(key, value string) error {
+	// step 1 : encode the record first to add in the wal
+	encRec, err := encodeRecord(record{Op: "SET", Key: key, Value: value})
+	if err != nil {
+		return err
+	}
+
+	if err := s.wal.Append(encRec); err != nil {
+		return err
+	}
+
 	sh := s.getShard(key)
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 	sh.data[key] = value
+	return nil
 }
 
 // get returns the key from the store itself
@@ -82,11 +152,21 @@ func (s *Store) Get(key string) (string, error) {
 	return val, nil
 }
 
-func (s *Store) Delete(key string) {
+func (s *Store) Delete(key string) error {
+	encRec, err := encodeRecord(record{Op: "DELETE", Key: key})
+	if err != nil {
+		return nil
+	}
+
+	if err := s.wal.Append(encRec); err != nil {
+		return err
+	}
+
 	sh := s.getShard(key)
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
 	delete(sh.data, key)
+	return nil
 }
 
 func (s *Store) Len() int {
@@ -97,4 +177,8 @@ func (s *Store) Len() int {
 		sh.mu.RUnlock()
 	}
 	return total
+}
+
+func (s *Store) Close() error {
+	return s.wal.Close()
 }

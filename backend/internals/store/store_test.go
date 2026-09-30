@@ -2,13 +2,18 @@ package store
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 )
 
 func TestConcurrentWrites(t *testing.T) {
-	s := New()
-
+	path := filepath.Join(t.TempDir(), "test.wal")
+	s, err := New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
 	var wg sync.WaitGroup
 
 	for i := 0; i < 100; i++ {

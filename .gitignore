@@ -5,6 +5,7 @@
 /cmd/kvstore/kvstore
 *.exe
 
+/data/
 # test/coverage
 *.out
 coverage.txt
