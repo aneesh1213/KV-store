@@ -1,52 +1,65 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/aneesh1213/kvstore/backend/internals/api"
 	"github.com/aneesh1213/kvstore/backend/internals/store"
 )
 
 func main() {
+
+	// step 1 : open the store
 	s, err := store.New("./data/kvstore.wal")
 
 	if err != nil {
-		fmt.Println("failed to open store:", err)
-		os.Exit(1)
+		log.Fatalf("failed to open store:", err)
 	}
 
-	if len(os.Args) > 1 && os.Args[1] == "read" {
-		// READ mode: only look for the keys, don't write them
-		fmt.Println("=== READ mode ===")
-		v1, err := s.Get("user:1")
-		if errors.Is(err, store.NotFound) {
-			fmt.Println("user:1 -> NOT FOUND")
-		} else {
-			fmt.Println("user:1 =", v1)
+	defer s.Close()
+	
+
+	// step 2 : build the api server on 8080
+
+	srv := api.New(s, ":8080")
+
+
+	// step 3 : start HTTP in goroutine so that main can wait for the signals
+
+	go func(){	
+		fmt.Println("listening on 8080");
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("http server failed: %v", err)
 		}
-		fmt.Println("total keys:", s.Len())
-		return
+	}()
+
+
+	// step 4 : wait for cntr + c or SIGTERM
+
+	quit := make(chan os.Signal, 1 );
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM);
+	<- quit
+
+	fmt.Print("shutting down")
+
+
+	// step 5: give 5 seconds to inflight requests to finish, then shut down
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.ShutDown(ctx); err != nil {
+		log.Printf("shutdown error: %v", err)
 	}
 
-	// WRITE mode (default): insert keys, then hold so you can Ctrl+C
-	fmt.Println("=== WRITE mode ===")
-	if err := s.Set("user:1", "alice"); err != nil {
-		fmt.Println("set failed:", err)
-		os.Exit(1)
-	}
-	if err := s.Set("user:2", "bob"); err != nil {
-		fmt.Println("set failed:", err)
-		os.Exit(1)
-	}
-	if err := s.Set("user:3", "carol"); err != nil {
-		fmt.Println("set failed:", err)
-		os.Exit(1)
-	}
-	fmt.Println("wrote user:1, user:2")
-	fmt.Println("total keys:", s.Len())
-	fmt.Println()
-	fmt.Println("Now Ctrl+C this process (or wait 30s for it to exit).")
-	time.Sleep(30 * time.Second)
+	// defer s.close runs now
+	fmt.Print("goodbye")
+	
 }
