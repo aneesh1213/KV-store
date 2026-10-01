@@ -28,7 +28,7 @@ func New(s *store.Store, addr string) *Server {
 
 	srv.http = &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: withLogging(mux),
 	}
 	return srv
 }
