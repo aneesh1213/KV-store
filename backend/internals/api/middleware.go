@@ -15,27 +15,25 @@ type statusRecorder struct {
 	status int
 }
 
-
 // writeheader funtion
 
-func (r *statusRecorder) WriteHeader(code int){
-	r.status = code;
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
 	r.ResponseWriter.WriteHeader(code)
 }
-
 
 // withLogging wraps h so every request is logged with method, path,
 // status, and latency.
 
 func withLogging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
-		start := time.Now();
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		rec := &statusRecorder{
 			ResponseWriter: w,
-			status: http.StatusOK,
+			status:         http.StatusOK,
 		}
 
-		next.ServeHTTP(rec, r);
+		next.ServeHTTP(rec, r)
 
 		log.Printf("%s %s %d %s",
 			r.Method,
@@ -45,5 +43,3 @@ func withLogging(next http.Handler) http.Handler {
 		)
 	})
 }
-
-
