@@ -48,3 +48,32 @@ Learned:
   ResponseWriter is how you observe what the handler wrote.
 - Latency numbers show the durability tax: PUT ~500µs (WAL fsync),
   GET ~0s (memory read).
+
+
+
+## 2026-10-12 — Stage 5 complete: snapshots + log compaction
+
+**Built:**
+- snapshot.go: Save/Load with atomic write (tmp → fsync → rename → fsync dir).
+- Store fields: snapshotPath, writesMu, writesSinceSnapshot (atomic int64),
+  snapshotThreshold (10,000).
+- snapshotNow: writesMu.Lock(), copy shards, Save, truncate WAL, reset counter.
+- Set/Delete take writesMu.RLock() (parallel), increment counter, spawn
+  snapshot goroutine at threshold.
+- Constructor: load snapshot BEFORE WAL replay.
+- main.go: forced snapshot on graceful shutdown.
+
+**Verified end-to-end:**
+- PUT two keys, Ctrl+C, check disk:
+    kvstore.snapshot  64 bytes
+    kvstore.wal        0 bytes
+- Restart, GET key → survives.
+
+**Learned:**
+- TestSnapshotAndRecover initially passed for the WRONG reason — WAL replay
+  masked a broken Snapshot that returned early on counter < threshold.
+  Fixed by asserting the snapshot file exists and WAL is truncated.
+- writesMu RLock vs Lock: with Lock in Set, all writes serialize and
+  sharding becomes pointless (15M ops/s → 2k ops/s collapse).
+- Recovery order matters: snapshot first, then WAL. Reversed = data loss.
+- Atomic rename is the classic pattern for "replace a file safely."
