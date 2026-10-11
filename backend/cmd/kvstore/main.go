@@ -55,7 +55,12 @@ func main() {
 		log.Printf("shutdown error: %v", err)
 	}
 
-	// defer s.close runs now
-	fmt.Print("goodbye")
+	// NEW: flush a final snapshot so the next startup is fast and clean.
+	if err := s.Snapshot(); err != nil {
+		log.Printf("final snapshot failed: %v", err)
+	}
+
+	// defer s.Close() runs now, closing the WAL.
+	fmt.Println("goodbye")
 
 }
