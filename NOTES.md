@@ -105,3 +105,67 @@ Learned:
   sharding becomes pointless (15M ops/s → 2k ops/s collapse).
 - Recovery order matters: snapshot first, then WAL. Reversed = data loss.
 - Atomic rename is the classic pattern for "replace a file safely."
+
+
+
+
+## Bugs that taught me the most
+
+### The false-positive test
+
+`TestSnapshotAndRecover` was passing. I was proud. Then I realized: it
+passed because WAL replay handled everything. The snapshot code was
+never exercised — `Snapshot()` was silently returning early because
+the counter was below the threshold.
+
+That's the day I learned: **a test that passes for the wrong reason is
+worse than no test.** Fixed it by asserting the snapshot file exists
+and the WAL is truncated. Now the test actually proves something.
+
+### Windows + O_APPEND + truncate
+
+On Windows, opening a file with `O_APPEND` gives you write-only-at-end
+access. `Truncate` fails with "Access is denied." Fix: open with
+`O_RDWR` and seek to end manually before each write.
+
+### RLock vs Lock in `writesMu`
+
+Almost shipped `writesMu.Lock()` in `Set`. That would have serialized
+every write globally, defeating the entire point of sharding. Caught it
+in code review. The difference between RLock and Lock in a hot path is
+the difference between a scalable system and a broken one.
+
+---
+
+## Numbers worth remembering
+
+| Test | Before | After |
+|---|---|---|
+| Benchmark, 4 cores, unsharded | 152 ns/op | — |
+| Benchmark, 4 cores, 32 shards | — | 65 ns/op |
+| Benchmark, 4 cores, all→shard 0 | — | 458 ns/op |
+| Startup time (empty store) | ~0 ms | ~0 ms |
+| Startup time (100k keys, WAL only) | seconds | milliseconds (snapshot) |
+| PUT latency (WAL fsync) | — | ~1 ms |
+| GET latency (memory read) | — | ~0 µs |
+
+---
+
+## What's next
+
+- Replication: leader → follower, WAL shipping over TCP
+- LLM inference serving system (Go control plane + Python worker)
+- Raft-based consensus (stretch goal)
+
+---
+
+## Reading list that made this click
+
+- Understanding Distributed Systems — Roberto Vitillo
+- Designing Data-Intensive Applications — Martin Kleppmann
+- The Twelve-Factor App (free)
+- TinyKV course (for Raft)
+
+---
+
+Last updated: 2026-10-12
