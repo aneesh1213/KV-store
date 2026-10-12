@@ -1,4 +1,32 @@
-# Devlog
+# KV Store — Project Devlog
+
+A sharded, durable, single-node key-value store written in Go.
+Built from scratch over six stages, each solving a specific problem.
+
+## Why I built this
+
+I wanted to understand how real databases work — not the API, the internals.
+Redis, LevelDB, SQLite all look like magic from the outside. After this
+project, they don't anymore.
+
+## The six stages
+
+### Stage 1 — Basic in-memory KV
+`Set / Get / Delete / Len` over a single `map[string]string`.
+The point: get the shape right before adding complexity.
+
+### Stage 2 — Concurrency
+Bombarded the store with 100 goroutines and watched it crash with
+`fatal error: concurrent map writes`. Added `sync.RWMutex`. Learned:
+race = correctness bug, not performance. Fixed correctness first.
+
+### Stage 3 — Sharding
+Benchmark: 1 → 4 goroutines went from 101 ns/op to 152 ns/op.
+More workers, worse throughput. That's contention.
+Split into 32 shards, hashed by FNV-1a. Reran: 164 → 65 ns/op at 4 cores.
+Then broke it on purpose (forced all keys to shard 0) and watched it drop
+to 458 ns/op — proving the shard distribution was the cause, not the code shape.
+
 
 ## 2026-09-29 — Stage 4 complete: durable store
 
