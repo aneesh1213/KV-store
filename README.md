@@ -1,4 +1,4 @@
-# KV Store
+# Distributed KV Store
 
 A sharded, durable, single-node key-value store written in Go.
 
