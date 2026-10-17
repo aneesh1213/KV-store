@@ -325,4 +325,4 @@ go test -bench=. -benchmem ./backend/internals/store
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE) if present.
+MIT — see [`LICENSE`](LICENSE) 
