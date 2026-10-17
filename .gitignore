@@ -1,11 +1,19 @@
+# environment
 .env
+.env.*
+
+# runtime data
+/data/
+*.wal
+*.snapshot
+*.snapshot.tmp
+*.tmp
 
 # binaries
 /kvstore
-/cmd/kvstore/kvstore
+/backend/cmd/kvstore/kvstore
 *.exe
 
-/data/
 # test/coverage
 *.out
 coverage.txt
@@ -16,3 +24,4 @@ coverage.txt
 
 # OS
 .DS_Store
+Thumbs.db
